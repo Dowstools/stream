@@ -50,31 +50,33 @@ function isLive(match) {
   return start <= now && start >= now - twoHoursMs;
 }
 
-function matchToMeta(match) {
+function matchToMeta(match, slim = false) {
   const live = isLive(match);
   const dateStr = formatDate(match.date);
   const status = live ? '🔴 LIVE' : (match.date > Date.now() ? '🕐 Upcoming' : '⏱ Recent');
 
-  return {
+  const poster = match.poster
+    ? `${BASE_URL}${match.poster}`
+    : (match.teams?.home?.badge ? `${BASE_URL}${match.teams.home.badge}` : null);
+
+  const meta = {
     id: `football:${match.id}`,
     type: 'tv',
-    name: match.title,
-    poster: match.poster
-      ? `${BASE_URL}${match.poster}`
-      : (match.teams?.home?.badge
-          ? `${BASE_URL}${match.teams.home.badge}`
-          : null),
-    background: match.teams?.home?.badge
-      ? `${BASE_URL}${match.teams.home.badge}`
-      : null,
-    logo: match.teams?.home?.badge
-      ? `${BASE_URL}${match.teams.home.badge}`
-      : null,
-    description: `${status} · ${dateStr}\n\n${match.teams?.home?.name || ''} vs ${match.teams?.away?.name || ''}`,
-    genres: [live ? 'Live' : 'Upcoming', 'Football'],
-    releaseInfo: dateStr,
+    name: `${status} ${match.title}`,
+    poster,
     behaviorHints: { defaultVideoId: `football:${match.id}` },
   };
+
+  // Full meta (for meta handler only) — skip heavy fields in catalog to stay under size limit
+  if (!slim) {
+    meta.background = poster;
+    meta.logo = poster;
+    meta.description = `${status} · ${dateStr}\n\n${match.teams?.home?.name || ''} vs ${match.teams?.away?.name || ''}`;
+    meta.genres = [live ? 'Live' : 'Upcoming', 'Football'];
+    meta.releaseInfo = dateStr;
+  }
+
+  return meta;
 }
 
 async function fetchMatches(endpoint) {
@@ -131,10 +133,10 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
   });
 
   const skip = parseInt(extra?.skip || 0);
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = 20;
   const page = matches.slice(skip, skip + PAGE_SIZE);
 
-  return { metas: page.map(matchToMeta) };
+  return { metas: page.map(m => matchToMeta(m, true)) };
 });
 
 // ── meta ─────────────────────────────────────────────────────────────────────
